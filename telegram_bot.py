@@ -34,65 +34,66 @@ def download_voice_file(file_id):
         return None
 
 def voicemod_transform(audio_bytes, effect=DEFAULT_EFFECT):
-    # Попробуем разные варианты авторизации
-    headers = {
-        'Authorization': f'Bearer {VOICEMOD_API_KEY}',
-        'Content-Type': 'multipart/form-data'
-    }
-    
-    # Альтернативный вариант с API ключом в заголовке
-    if not VOICEMOD_API_KEY.startswith('Bearer'):
-        headers = {
-            'X-API-Key': VOICEMOD_API_KEY,
-            'Content-Type': 'multipart/form-data'
-        }
+    # Разные варианты авторизации
+    auth_variants = [
+        {'Authorization': f'Bearer {VOICEMOD_API_KEY}'},
+        {'X-API-Key': VOICEMOD_API_KEY},
+        {'api-key': VOICEMOD_API_KEY},
+        {'client-key': VOICEMOD_API_KEY},
+        {'Authorization': f'Client {VOICEMOD_API_KEY}'},
+        {'Authorization': f'ApiKey {VOICEMOD_API_KEY}'},
+        {'Authorization': VOICEMOD_API_KEY},
+    ]
     
     files = {
-        'audio': ('voice.ogg', audio_bytes, 'audio/ogg')
+        'audio': ('voice.ogg', audio_bytes, 'audio/ogg'),
+        'voice': ('voice.ogg', audio_bytes, 'audio/ogg'),
+        'file': ('voice.ogg', audio_bytes, 'audio/ogg')
     }
     
-    data = {
-        'effect': effect
-    }
+    data_variants = [
+        {'effect': effect},
+        {'voice_effect': effect},
+        {'filter': effect},
+        {'voice_filter': effect}
+    ]
     
-    # Попробуем разные URL API
     api_urls = [
         'https://api.voicemod.net/v1/voice/transform',
         'https://api.voicemod.net/v2/voice/transform',
         'https://api.voicemod.net/voice/transform',
-        'https://api.voicemod.net/transform'
+        'https://api.voicemod.net/transform',
+        'https://api.voicemod.net/v1/transform'
     ]
     
     for url in api_urls:
-        try:
-            print(f"Пробуем URL: {url}")
-            response = requests.post(url, headers=headers, files=files, data=data, timeout=60)
-            print(f"Статус ответа: {response.status_code}")
-            print(f"Заголовки ответа: {response.headers}")
-            
-            if response.status_code == 200:
-                return response.content
-            elif response.status_code == 401:
-                print(f"Ошибка авторизации для {url}")
-                continue
-            else:
-                print(f"Ошибка {response.status_code} для {url}: {response.text}")
-                
-        except Exception as e:
-            print(f"Ошибка для {url}: {e}")
-            continue
+        for auth in auth_variants:
+            for data in data_variants:
+                for file_key, file_data in files.items():
+                    try:
+                        headers = auth.copy()
+                        headers['Content-Type'] = 'multipart/form-data'
+                        
+                        current_files = {file_key: file_data}
+                        
+                        print(f"Пробуем: {url} | Auth: {list(auth.keys())[0]} | Data: {data} | File: {file_key}")
+                        response = requests.post(url, headers=headers, files=current_files, data=data, timeout=60)
+                        print(f"Статус: {response.status_code}")
+                        
+                        if response.status_code == 200:
+                            print("✅ Успех!")
+                            return response.content
+                        elif response.status_code == 401:
+                            print(f"❌ 401 для {list(auth.keys())[0]}")
+                            continue
+                        else:
+                            print(f"❌ {response.status_code}: {response.text[:100]}")
+                            
+                    except Exception as e:
+                        print(f"❌ Ошибка: {e}")
+                        continue
     
-    # Если все URL не работают, попробуем без авторизации (для тестирования)
-    try:
-        print("Пробуем без авторизации...")
-        response = requests.post('https://api.voicemod.net/v1/voice/transform', 
-                               files=files, data=data, timeout=60)
-        print(f"Статус без авторизации: {response.status_code}")
-        if response.status_code == 200:
-            return response.content
-    except Exception as e:
-        print(f"Ошибка без авторизации: {e}")
-    
+    print("❌ Все варианты не сработали")
     return None
 
 @bot.message_handler(commands=['start'])

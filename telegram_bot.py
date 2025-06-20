@@ -1,62 +1,29 @@
-import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-from config import TELEGRAM_TOKEN
+import os
+from dotenv import load_dotenv
+import telebot
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+load_dotenv()
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /start"""
-    await update.message.reply_text(
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+CHAT_ID = os.getenv('CHAT_ID')
+
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.reply_to(message, (
         "Привет! Я бот для мониторинга заметок iPhone.\n\n"
         "Доступные команды:\n"
         "/start - показать это сообщение\n"
         "/check - проверить заметки на изменения"
-    )
+    ))
 
-async def check_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /check"""
-    await update.message.reply_text("🔍 Начинаю проверку заметок...")
-    
-    try:
-        # Здесь будет логика проверки заметок
-        # Пока что просто заглушка
-        await update.message.reply_text("✅ Проверка завершена. Изменений не обнаружено.")
-    except Exception as e:
-        logger.error(f"Ошибка при проверке заметок: {e}")
-        await update.message.reply_text("❌ Произошла ошибка при проверке заметок.")
-
-async def main():
-    if not TELEGRAM_TOKEN:
-        logger.error("TELEGRAM_TOKEN не настроен")
-        return
-
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    
-    # Добавляем обработчики команд
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("check", check_notes))
-    
-    logger.info("Бот запущен! Используйте /start для получения справки.")
-    await app.run_polling()
+@bot.message_handler(commands=['check'])
+def check(message):
+    bot.reply_to(message, "🔍 Начинаю проверку заметок...")
+    # Здесь будет логика проверки заметок
+    bot.reply_to(message, "✅ Проверка завершена. Изменений не обнаружено.")
 
 if __name__ == '__main__':
-    import asyncio
-    try:
-        # Пробуем стандартный способ
-        asyncio.run(main())
-    except RuntimeError as e:
-        if "event loop is already running" in str(e):
-            # Если event loop уже запущен, используем альтернативный способ
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Создаем новую задачу в существующем loop
-                loop.create_task(main())
-            else:
-                loop.run_until_complete(main())
-        else:
-            raise e 
+    print('Бот запущен! Используйте /start для получения справки.')
+    bot.polling(none_stop=True) 

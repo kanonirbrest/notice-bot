@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 import os
 import requests
+import io
+import tempfile
 from dotenv import load_dotenv
 import telebot
+from pydub import AudioSegment
+from pydub.effects import speedup, normalize
+import numpy as np
 
 load_dotenv()
 
@@ -84,31 +89,164 @@ def format_rhymes(rhymes, original_word):
     result += f"\nНайдено рифм: {len(rhymes)}"
     return result
 
+def apply_audio_effect(audio_file, effect_type="echo"):
+    """Применяет звуковой эффект к аудиофайлу"""
+    try:
+        # Загружаем аудио
+        audio = AudioSegment.from_file(audio_file)
+        
+        if effect_type == "echo":
+            # Эффект эхо
+            delay_ms = 200
+            decay = 0.5
+            echo = audio - (decay * 20)  # Уменьшаем громкость
+            combined = audio.overlay(echo, position=delay_ms)
+            
+        elif effect_type == "reverb":
+            # Простой реверб
+            reverb = audio - 10  # Уменьшаем громкость
+            combined = audio.overlay(reverb, position=100)
+            combined = combined.overlay(reverb, position=200)
+            
+        elif effect_type == "speedup":
+            # Ускорение
+            combined = speedup(audio, playback_speed=1.5)
+            
+        elif effect_type == "slowdown":
+            # Замедление
+            combined = speedup(audio, playback_speed=0.7)
+            
+        elif effect_type == "pitch_up":
+            # Повышение тона
+            combined = audio._spawn(audio.raw_data, overrides={'frame_rate': int(audio.frame_rate * 1.2)})
+            combined = combined.set_frame_rate(audio.frame_rate)
+            
+        elif effect_type == "pitch_down":
+            # Понижение тона
+            combined = audio._spawn(audio.raw_data, overrides={'frame_rate': int(audio.frame_rate * 0.8)})
+            combined = combined.set_frame_rate(audio.frame_rate)
+            
+        elif effect_type == "normalize":
+            # Нормализация громкости
+            combined = normalize(audio)
+            
+        else:
+            # По умолчанию - эхо
+            delay_ms = 200
+            decay = 0.5
+            echo = audio - (decay * 20)
+            combined = audio.overlay(echo, position=delay_ms)
+        
+        return combined
+        
+    except Exception as e:
+        print(f"Ошибка при применении эффекта: {e}")
+        return None
+
+def download_voice_file(file_id):
+    """Скачивает голосовое сообщение"""
+    try:
+        file_info = bot.get_file(file_id)
+        file_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_info.file_path}"
+        
+        response = requests.get(file_url)
+        response.raise_for_status()
+        
+        return io.BytesIO(response.content)
+        
+    except Exception as e:
+        print(f"Ошибка при скачивании файла: {e}")
+        return None
+
 @bot.message_handler(commands=['start'])
 def start(message):
     bot.reply_to(message, (
-        "🎵 Привет! Я бот для поиска рифм.\n\n"
-        "Просто напиши любое слово, и я найду к нему рифмы!\n\n"
-        "Доступные команды:\n"
+        "🎵 Привет! Я бот для поиска рифм и обработки аудио.\n\n"
+        "Доступные функции:\n"
+        "• Напиши слово → найду рифмы\n"
+        "• Отправь голосовое сообщение → применю эффект\n\n"
+        "Команды:\n"
         "/start - показать это сообщение\n"
-        "/help - справка по использованию\n\n"
-        "Пример: напиши 'дом' и получишь рифмы!"
+        "/help - справка по использованию\n"
+        "/effects - список доступных эффектов"
     ))
 
 @bot.message_handler(commands=['help'])
 def help_command(message):
     bot.reply_to(message, (
         "🎵 Как использовать бота:\n\n"
+        "**Поиск рифм:**\n"
         "1. Просто напиши любое слово\n"
-        "2. Бот найдет к нему рифмы\n"
-        "3. Рифмы отсортированы по качеству\n\n"
-        "Примеры слов для тестирования:\n"
-        "• дом\n"
-        "• любовь\n"
-        "• солнце\n"
-        "• песня\n\n"
-        "Бот работает с русскими словами!"
+        "2. Бот найдет к нему рифмы\n\n"
+        "**Обработка аудио:**\n"
+        "1. Отправь голосовое сообщение\n"
+        "2. Выбери эффект из списка\n"
+        "3. Получи обработанное аудио\n\n"
+        "Используй /effects для списка доступных эффектов!"
     ))
+
+@bot.message_handler(commands=['effects'])
+def effects_command(message):
+    bot.reply_to(message, (
+        "🎛️ Доступные звуковые эффекты:\n\n"
+        "• **echo** - эхо\n"
+        "• **reverb** - реверберация\n"
+        "• **speedup** - ускорение\n"
+        "• **slowdown** - замедление\n"
+        "• **pitch_up** - повышение тона\n"
+        "• **pitch_down** - понижение тона\n"
+        "• **normalize** - нормализация громкости\n\n"
+        "Отправь голосовое сообщение, затем выбери эффект!"
+    ))
+
+@bot.message_handler(content_types=['voice'])
+def handle_voice(message):
+    """Обрабатывает голосовые сообщения"""
+    try:
+        # Отправляем сообщение о начале обработки
+        processing_msg = bot.reply_to(message, "🎵 Обрабатываю голосовое сообщение...")
+        
+        # Скачиваем файл
+        voice_file = download_voice_file(message.voice.file_id)
+        if not voice_file:
+            bot.edit_message_text("❌ Не удалось скачать голосовое сообщение", 
+                                chat_id=processing_msg.chat.id, 
+                                message_id=processing_msg.message_id)
+            return
+        
+        # Создаем временный файл
+        with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
+            temp_file.write(voice_file.getvalue())
+            temp_file_path = temp_file.name
+        
+        # Применяем эффект (по умолчанию эхо)
+        processed_audio = apply_audio_effect(temp_file_path, "echo")
+        
+        if processed_audio:
+            # Сохраняем обработанное аудио
+            output_path = temp_file_path.replace('.ogg', '_processed.ogg')
+            processed_audio.export(output_path, format='ogg')
+            
+            # Отправляем обработанное аудио
+            with open(output_path, 'rb') as audio_file:
+                bot.send_voice(message.chat.id, audio_file, 
+                             caption="🎛️ Обработанное аудио с эффектом эхо")
+            
+            # Удаляем временные файлы
+            os.unlink(temp_file_path)
+            os.unlink(output_path)
+            
+            bot.edit_message_text("✅ Аудио обработано! Отправлено с эффектом эхо.", 
+                                chat_id=processing_msg.chat.id, 
+                                message_id=processing_msg.message_id)
+        else:
+            bot.edit_message_text("❌ Не удалось применить эффект к аудио", 
+                                chat_id=processing_msg.chat.id, 
+                                message_id=processing_msg.message_id)
+            
+    except Exception as e:
+        print(f"Ошибка при обработке голосового сообщения: {e}")
+        bot.reply_to(message, "❌ Произошла ошибка при обработке аудио")
 
 @bot.message_handler(func=lambda message: True)
 def handle_word(message):
@@ -140,6 +278,6 @@ def handle_word(message):
     )
 
 if __name__ == '__main__':
-    print('🎵 Бот для поиска рифм запущен!')
+    print('🎵 Бот для поиска рифм и обработки аудио запущен!')
     print('Используйте /start для получения справки.')
     bot.polling(none_stop=True) 

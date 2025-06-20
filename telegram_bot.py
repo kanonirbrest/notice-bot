@@ -2,8 +2,7 @@
 import os
 from dotenv import load_dotenv
 import telebot
-from config import ICLOUD_EMAIL, ICLOUD_PASSWORD
-from notes_monitor import NotesMonitor
+from local_notes_reader import LocalNotesReader
 
 load_dotenv()
 
@@ -23,13 +22,13 @@ def start(message):
 
 @bot.message_handler(commands=['check'])
 def check(message):
-    bot.reply_to(message, "🔍 Начинаю проверку заметок через iCloud...")
-    monitor = NotesMonitor(icloud_email=ICLOUD_EMAIL, icloud_password=ICLOUD_PASSWORD)
-    notes = monitor.check_icloud_notes()
+    bot.reply_to(message, "🔍 Начинаю проверку локальных заметок...")
+    reader = LocalNotesReader()
+    notes = reader.check_local_notes()
     if notes is None:
-        bot.reply_to(message, "❌ Не удалось получить заметки. Проверьте логин/пароль или 2FA.")
+        bot.reply_to(message, "❌ Не удалось получить заметки. Убедитесь, что запускаете на Mac и заметки синхронизированы.")
         return
-    changes = monitor.detect_changes(notes)
+    changes = reader.detect_changes(notes)
     if not changes:
         bot.reply_to(message, "✅ Проверка завершена. Изменений не обнаружено.")
     else:

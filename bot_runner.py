@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""
+Альтернативный запуск бота для Replit
+"""
+import asyncio
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -42,21 +47,27 @@ async def main():
     app.add_handler(CommandHandler("check", check_notes))
     
     logger.info("Бот запущен! Используйте /start для получения справки.")
-    await app.run_polling()
+    
+    # Используем run_polling с параметрами для Replit
+    await app.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True
+    )
+
+def run_bot():
+    """Функция для запуска бота на Replit"""
+    try:
+        # Проверяем, есть ли уже запущенный event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # Если loop уже запущен, создаем задачу
+            loop.create_task(main())
+        except RuntimeError:
+            # Если loop не запущен, запускаем новый
+            asyncio.run(main())
+    except Exception as e:
+        logger.error(f"Ошибка запуска бота: {e}")
+        raise
 
 if __name__ == '__main__':
-    import asyncio
-    try:
-        # Пробуем стандартный способ
-        asyncio.run(main())
-    except RuntimeError as e:
-        if "event loop is already running" in str(e):
-            # Если event loop уже запущен, используем альтернативный способ
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Создаем новую задачу в существующем loop
-                loop.create_task(main())
-            else:
-                loop.run_until_complete(main())
-        else:
-            raise e 
+    run_bot() 

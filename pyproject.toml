@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "notice-bot"
+version = "1.0.0"
+description = "Telegram bot for monitoring iCloud shared notes"
+requires-python = ">=3.8"
+dependencies = [
+    "python-telegram-bot==20.8",
+    "python-dotenv==1.0.0"
+] 

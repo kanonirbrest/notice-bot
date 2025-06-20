@@ -1,5 +1,3 @@
 pyTelegramBotAPI
 python-dotenv
-requests
-pydub
-numpy 
+requests 

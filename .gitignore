@@ -44,14 +44,5 @@ logs/
 *.tmp
 *.temp
 
-# Chrome WebDriver
-chromedriver
-chromedriver.exe
-
-# База данных
-*.db
-*.sqlite
-*.sqlite3
-
 # Кеш
 .cache/ 
